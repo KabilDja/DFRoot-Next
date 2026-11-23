@@ -2,11 +2,11 @@ name: Build
 
 on:
   push:
-    branches: [master, main]
-    tags: ['v*']
-  pull_request:
-    branches: [master, main]
+    branches: [ui-next]
+    paths-ignore: [".github/workflows/inspect.yml", "app/src/androidTest/**"]
   workflow_dispatch:
+permissions:
+  contents: read
 
 jobs:
   build-lkms:
@@ -85,6 +85,8 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
 
       - name: Build DFRoot APK
         run: |
@@ -94,16 +96,16 @@ jobs:
             ./gradlew :app:assembleRelease
           fi
 
-      - name: Upload DFRoot APK
+      - name: Encrypt private test APK
+        env:
+          ARTIFACT_PASSWORD: ${{ secrets.TEST_ARTIFACT_PASSWORD }}
+        run: |
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in app/build/outputs/apk/release/DFRoot_*.apk -out DFRoot-Next-v1.0.apk.enc -pass env:ARTIFACT_PASSWORD
+          rm app/build/outputs/apk/release/DFRoot_*.apk
+
+      - name: Upload encrypted APK
         uses: actions/upload-artifact@v7
         with:
           name: DFRoot
-          path: |
-            app/build/outputs/apk/release/DFRoot_*.apk
-            app/build/outputs/apk/debug/DFRoot_*.apk
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: app/build/outputs/apk/release/DFRoot_*.apk
+          path: DFRoot-Next-v1.0.apk.enc
+          retention-days: 7
